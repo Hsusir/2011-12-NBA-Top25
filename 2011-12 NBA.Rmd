@@ -1,0 +1,77 @@
+---
+title: "2011-12 NBA Top25"
+author: "許sir"
+date: "Friday, May 01, 2015"
+output: html_document
+---
+### Data Description
+2011-12 NBA球季，ESPN選出的前25名球星，包含
+
++ 得分： ppg
++ 籃板： rpg
++ 助攻： apg
++ 火鍋： blk
++ 抄截： stl
+
+等數據。我們可以集群分析來將25名球星歸類。
+
+###函數說明
+```{r message=FALSE, warning=FALSE, results='hide'}
+#dist() 計算距離矩陣
+#hclust()集群分析
+#cutree()指定歸類為n群
+#pvclust()計算p值的集群分析
+#t()行列互換
+
+```
+### 1.設定所需的函式庫(libraries)以及載入資料
+```{r message=FALSE, warning=FALSE}
+#install.packages("pvclust");
+library(pvclust) #計算集群分析與P值之套件
+
+setwd("d:/Rdata Practice")
+nba<-read.csv("2011NBA.csv", header=T, sep=",")
+nba[1:5,]
+
+```
+### 2.集群分析
+```{r message=FALSE, warning=FALSE}
+nba.clust<-nba[,-c(1,2)]#排除資料中的player與division文字變數，方便計算歐幾里得距離
+means<-apply(nba.clust, 2, mean)#標準化變數，計算每攔變數的平均數，2代表column，1代表row
+sds<-apply(nba.clust, 2, sd)#標準化變數，計算每欄變數的標準差，2代表column，1代表row
+nba.clust<-scale(nba.clust, center=means, scale=sds)#標準化變數，計算Z分數
+nba.dist<-dist(nba.clust,, method="euclidean")#計算歐幾里得距離
+nba.fit<-hclust(nba.dist, method="ward.D")#以Ward法進行集群分析
+#The "ward" method has been renamed to "ward.D"; note new "ward.D2"
+
+plot(nba.fit, labels=nba$player, main="2011-12 NBA TOP25")#繪製集群分析樹狀圖
+rect.hclust(nba.fit, k=5, border="red") #以紅線指定5個集群
+```
+
+```{r message=FALSE, warning=FALSE}
+cluster5<-cutree(nba.fit, k=5) #指定集群分析為5群
+nba$player[cluster5==1] #呼叫屬於第一集群的分析結果
+sapply(unique(cluster5), function(a)nba$player[cluster5==a])#呼叫全部集群分析結果
+```
+
+```{r message=FALSE, warning=FALSE}
+nba.new<-cbind(nba, cbind(cluster5))#將集群分析產生的新變數cluster5，與原資料nba合併
+nba.new$cluster5<-factor(nba.new$cluster5, levels=c(1:5), labels=c("scorer", "defender", "point guard", "combo guard", "power forward"))#將五個集群依序命名
+table(nba.new$division, nba.new$cluster5)#比較NBA東西區的集群分布
+
+nba.new
+```
+> 我們透過集群分析，將NBA 25位球星分為五種類型，分別是**得分主力、防守悍將、控球後衛、雙能衛與強力前鋒**。集群分析是希望能使群內同質性高，群間異質性大。可以簡單以變異數分析，看看是否達到集群分析目的。
+
+### 3.變異數分析
+```{r message=FALSE, warning=FALSE}
+anova(lm(nba.new$ppg~factor(cluster5)))#平均得分與球員類型單因子變異數分析
+```
+### 4.集群分析與P值
+```{r message=FALSE, warning=FALSE}
+#pvclust套件，提供pvclust()函數計算au(Approximately Unbiased)P值 及bp((Bootstrap Probability)
+nbaclust.pvalue<-pvclust(t(nba.clust), method.hclust="ward.D", method.dist="euclidean") #pvclust集群分析以欄為分類基礎，因此先用t()函數行列互換
+
+plot(nbaclust.pvalue, labels=nba$player, main="2011-12 NBA TOP25 with P-value")
+```
+
